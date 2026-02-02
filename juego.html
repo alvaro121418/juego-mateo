@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Beyblade: Duelo o CPU</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: 'Arial', sans-serif; }
+        #ui { position: absolute; width: 100%; color: white; text-align: center; pointer-events: none; padding-top: 10px; }
+        .stats-container { display: flex; justify-content: space-around; width: 100%; margin-bottom: 10px; }
+        .stat-box { width: 250px; }
+        .life-bar-bg { width: 100%; height: 15px; background: #444; border-radius: 10px; border: 1px solid #fff; overflow: hidden; }
+        .life-bar { height: 100%; width: 100%; transition: width 0.2s; }
+        #player-life { background: #e74c3c; }
+        #enemy-life { background: #3498db; } /* Azul estándar */
+        
+        .controls-hint { font-size: 0.8em; color: #aaa; margin-top: 5px; }
+        #power-container { width: 300px; height: 10px; background: #333; margin: 10px auto; border-radius: 5px; }
+        #power-bar { width: 0%; height: 100%; background: #f1c40f; border-radius: 5px; }
+        
+        #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; text-align: center; display: none; pointer-events: all; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; }
+        button { padding: 10px 20px; font-size: 1.2rem; cursor: pointer; background: #27ae60; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="stats-container">
+            <div class="stat-box">
+                <div>P1: ROJO (ESPACIO)</div>
+                <div class="life-bar-bg"><div id="player-life" class="life-bar"></div></div>
+            </div>
+            <div class="stat-box">
+                <div id="p2-label">RIVAL: CPU</div>
+                <div class="life-bar-bg"><div id="enemy-life" class="life-bar"></div></div>
+                <div class="controls-hint">Presiona ENTER para jugar P2</div>
+            </div>
+        </div>
+        <div id="power-container"><div id="power-bar"></div></div>
+    </div>
+
+    <div id="msg">
+        <h1 id="winner-text"></h1>
+        <button onclick="location.reload()">REVANCHA</button>
+    </div>
+
+    <script>
+        const { Engine, Render, Runner, Bodies, Composite, Body, Events } = Matter;
+        const engine = Engine.create();
+        engine.world.gravity.y = 0; // Desactivar gravedad global para evitar caídas
+
+        const render = Render.create({
+            element: document.body,
+            engine: engine,
+            options: { width: window.innerWidth, height: window.innerHeight, wireframes: false, background: '#111' }
+        });
+
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        let gameOver = false;
+        let p2IsHuman = false;
+
+        // --- ARENA ---
+        for (let i = 0; i < 32; i++) {
+            const angle = (i / 32) * Math.PI * 2;
+            const wall = Bodies.rectangle(centerX + Math.cos(angle) * 320, centerY + Math.sin(angle) * 320, 60, 20, {
+                isStatic: true, angle: angle + Math.PI / 2, render: { fillStyle: '#2c3e50' }
+            });
+            Composite.add(engine.world, wall);
+        }
+
+        // --- BEYBLADES ---
+        function createBey(x, y, color) {
+            const b = Bodies.circle(x, y, 25, {
+                restitution: 1, frictionAir: 0.005, mass: 5,
+                render: { fillStyle: color, strokeStyle: '#fff', lineWidth: 3 }
+            });
+            b.hp = 100;
+            b.charge = 0;
+            b.isCharging = false;
+            b.launched = false;
+            return b;
+        }
+
+        const p1 = createBey(centerX, centerY + 220, '#e74c3c');
+        const p2 = createBey(centerX, centerY - 220, '#57606f'); // Gris mientras es CPU
+        Composite.add(engine.world, [p1, p2]);
+
+        // --- CONTROLES ---
+        window.addEventListener('keydown', (e) => {
+            if (gameOver) return;
+            if (e.code === 'Space' && !p1.launched) p1.isCharging = true;
+            if (e.code === 'Enter' && !p2.launched) {
+                p2.isCharging = true;
+                if (!p2IsHuman) {
+                    p2IsHuman = true;
+                    p2.render.fillStyle = '#3498db';
+                    document.getElementById('p2-label').innerText = "P2: AZUL (ENTER)";
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' && p1.isCharging) launch(p1, -1);
+            if (e.code === 'Enter' && p2.isCharging) launch(p2, 1);
+        });
+
+        function launch(bey, direction) {
+            bey.launched = true;
+            bey.isCharging = false;
+            const pwr = (bey.charge / 1.5) + 0.2;
+            Body.applyForce(bey, bey.position, { x: (Math.random()-0.5)*0.02, y: 0.15 * direction * pwr });
+            Body.setAngularVelocity(bey, 0.8 * pwr * (direction * -1));
+            
+            // Si P1 lanza y P2 es CPU, lanzar CPU automáticamente
+            if (bey === p1 && !p2IsHuman) {
+                setTimeout(() => {
+                    p2.charge = 1.2;
+                    launch(p2, 1);
+                }, 300);
+            }
+        }
+
+        // --- LÓGICA DE JUEGO ---
+        Events.on(engine, 'afterUpdate', () => {
+            if (gameOver) return;
+
+            [p1, p2].forEach(bey => {
+                if (bey.isCharging) {
+                    bey.charge = Math.min(bey.charge + 0.02, 1.5);
+                    if (bey === p1) document.getElementById('power-bar').style.width = (bey.charge / 1.5) * 100 + '%';
+                    Body.setPosition(bey, { x: bey.position.x + (Math.random()-0.5)*3, y: bey.position.y });
+                }
+
+                if (bey.launched) {
+                    // Desgaste
+                    bey.hp -= (Math.abs(bey.angularVelocity) < 0.1) ? 0.2 : 0.02;
+                    
+                    // Atracción al centro
+                    const force = 0.00002;
+                    Body.applyForce(bey, bey.position, { 
+                        x: (centerX - bey.position.x) * force, 
+                        y: (centerY - bey.position.y) * force 
+                    });
+
+                    // IA del Enemigo (Solo si no es humano)
+                    if (bey === p2 && !p2IsHuman && p1.launched) {
+                        const dist = Math.hypot(p1.position.x - p2.position.x, p1.position.y - p2.position.y);
+                        const aiStrength = dist < 150 ? 0.0001 : 0.00002;
+                        Body.applyForce(p2, p2.position, { 
+                            x: (p1.position.x - p2.position.x) * aiStrength, 
+                            y: (p1.position.y - p2.position.y) * aiStrength 
+                        });
+                    }
+                }
+            });
+
+            document.getElementById('player-life').style.width = Math.max(0, p1.hp) + '%';
+            document.getElementById('enemy-life').style.width = Math.max(0, p2.hp) + '%';
+
+            if (p1.hp <= 0 || p2.hp <= 0) {
+                gameOver = true;
+                document.getElementById('msg').style.display = 'block';
+                document.getElementById('winner-text').innerText = p1.hp > p2.hp ? "¡GANÓ P1 (ROJO)!" : "¡GANÓ RIVAL!";
+            }
+        });
+
+        // Colisiones
+        Events.on(engine, 'collisionStart', (event) => {
+            event.pairs.forEach(pair => {
+                if ((pair.bodyA === p1 && pair.bodyB === p2) || (pair.bodyA === p2 && pair.bodyB === p1)) {
+                    const impact = Math.abs(p1.speed + p2.speed) * 2;
+                    p1.hp -= 3 + impact;
+                    p2.hp -= 3 + impact;
+                }
+            });
+        });
+
+        Render.run(render);
+        Runner.run(Runner.create(), engine);
+    </script>
+</body>
+</html>
