@@ -23,6 +23,22 @@
     </style>
 </head>
 <body>
+    <dialog open="">
+        <form method="dialog">
+            <p> ----------------------------------</p></b> <p> ----------------------------------</p></b> 
+            <p>
+                Juego casero de bleyblade por el cumpleaños de Mateo</p></b> 
+            <p>¿Como se juega?</p></b> 
+            <p>
+                Si vas a jugar en solitario solo tenes que apretar la barra espaciadora y soltar cuando tu energia (la barra amarilla) este donde tu quieras, por otro lado
+            </p>
+            <p>
+                si van a hacer 2 los jugadores para que entre el segundo jugador solamente tendra que apretar la tecla enter (mantendiendo apretado)
+            </p></b>   
+            <button id="cerrar">Cerrar</button>  
+        </form>    
+    </dialog>
+
     <div id="ui">
         <div class="stats-container">
             <div class="stat-box">
@@ -44,6 +60,7 @@
     </div>
 
     <script>
+        const cerrar = document.getElementById('cerrar');
         const { Engine, Render, Runner, Bodies, Composite, Body, Events } = Matter;
         const engine = Engine.create();
         engine.world.gravity.y = 0; // Desactivar gravedad global para evitar caídas
